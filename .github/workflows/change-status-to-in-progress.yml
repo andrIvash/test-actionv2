@@ -55,7 +55,7 @@ jobs:
             const projectItems = result.repository.issue.projectItems.nodes;
 
             // Find the project item for the specific project
-            const projectItem = projectItems.find(item => item.project.title === "Your Project Name");
+            const projectItem = projectItems.find(item => item.project.title === "test1-project");
 
             if (projectItem) {
               const projectItemId = projectItem.id;
@@ -68,25 +68,7 @@ jobs:
               }
               const statusFieldId = statusField.id;
 
-              // GraphQL mutation to move the project item to In Progress
-              const mutation = `
-                mutation($projectId: ID!, $projectItemId: ID!, $fieldId: ID!, $status: String!) {
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $projectId,
-                    itemId: $projectItemId,
-                    fieldId: $fieldId,
-                    value: {
-                      singleSelectOptionId: $status
-                    }
-                  }) {
-                    projectV2Item {
-                      id
-                    }
-                  }
-                }
-              `;
-
-              // Fetch the "In Progress" status option ID
+              // GraphQL query to fetch the "In Progress" status option ID
               const statusOptionsQuery = `
                 query($fieldId: ID!) {
                   node(id: $fieldId) {
@@ -102,11 +84,29 @@ jobs:
               const statusOptionsResult = await github.graphql(statusOptionsQuery, {
                 fieldId: statusFieldId
               });
-              const inProgressOption = statusOptionsResult.node.options.find(option => option.name === "test1-project");
+              const inProgressOption = statusOptionsResult.node.options.find(option => option.name === "In Progress");
               if (!inProgressOption) {
                 throw new Error(`"In Progress" status not found in project`);
               }
               const inProgressOptionId = inProgressOption.id;
+
+              // GraphQL mutation to move the project item to In Progress
+              const mutation = `
+                mutation($projectId: ID!, $projectItemId: ID!, $fieldId: ID!, $status: ID!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId,
+                    itemId: $projectItemId,
+                    fieldId: $fieldId,
+                    value: {
+                      singleSelectOptionId: $status
+                    }
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `;
 
               await github.graphql(mutation, {
                 projectId: projectId,
