@@ -49,7 +49,7 @@ jobs:
             const projectItems = result.repository.issue.projectItems.nodes;
 
             // Find the project item for the specific project
-            const projectItem = projectItems.find(item => item.project.title === "Your Project Name");
+            const projectItem = projectItems.find(item => item.project.title === "test1-project");
 
             if (projectItem) {
               const projectItemId = projectItem.id;
