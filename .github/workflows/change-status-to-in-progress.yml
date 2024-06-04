@@ -30,6 +30,12 @@ jobs:
                         project {
                           id
                           title
+                          fields(first: 10) {
+                            nodes {
+                              id
+                              name
+                            }
+                          }
                         }
                       }
                     }
@@ -49,20 +55,29 @@ jobs:
             const projectItems = result.repository.issue.projectItems.nodes;
 
             // Find the project item for the specific project
-            const projectItem = projectItems.find(item => item.project.title === "test1-project");
+            const projectItem = projectItems.find(item => item.project.title === "Your Project Name");
 
             if (projectItem) {
               const projectItemId = projectItem.id;
               const projectId = projectItem.project.id;
 
+              // Find the "Status" field ID
+              const statusField = projectItem.project.fields.nodes.find(field => field.name === "Status");
+              if (!statusField) {
+                throw new Error(`"Status" field not found in project`);
+              }
+              const statusFieldId = statusField.id;
+
               // GraphQL mutation to move the project item to In Progress
               const mutation = `
-                mutation($projectItemId: ID!, $status: String!) {
+                mutation($projectId: ID!, $projectItemId: ID!, $fieldId: ID!, $status: String!) {
                   updateProjectV2ItemFieldValue(input: {
                     projectId: $projectId,
                     itemId: $projectItemId,
-                    field: "status",
-                    value: { name: $status }
+                    fieldId: $fieldId,
+                    value: {
+                      singleSelectOptionId: $status
+                    }
                   }) {
                     projectV2Item {
                       id
@@ -71,13 +86,37 @@ jobs:
                 }
               `;
 
+              // Fetch the "In Progress" status option ID
+              const statusOptionsQuery = `
+                query($fieldId: ID!) {
+                  node(id: $fieldId) {
+                    ... on ProjectV2Field {
+                      options {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+              `;
+              const statusOptionsResult = await github.graphql(statusOptionsQuery, {
+                fieldId: statusFieldId
+              });
+              const inProgressOption = statusOptionsResult.node.options.find(option => option.name === "test1-project");
+              if (!inProgressOption) {
+                throw new Error(`"In Progress" status not found in project`);
+              }
+              const inProgressOptionId = inProgressOption.id;
+
               await github.graphql(mutation, {
                 projectId: projectId,
                 projectItemId: projectItemId,
-                status: "In Progress"
+                fieldId: statusFieldId,
+                status: inProgressOptionId
               });
 
               console.log(`Moved issue #${issueNumber} to "In Progress"`);
             } else {
               console.log(`Issue #${issueNumber} is not part of the specified project`);
             }
+
