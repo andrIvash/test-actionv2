@@ -1,4 +1,4 @@
-name: Change status of the assigned issue to In Progress
+name: Move Assigned Issue to In Progress
 
 on:
   issues:
@@ -9,9 +9,6 @@ jobs:
     name: Move
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
       - name: Move issue to In Progress
         uses: actions/github-script@v6
         with:
@@ -21,38 +18,66 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+            // GraphQL query to get the project and issue information
+            const query = `
+              query($owner: String!, $repo: String!, $issueNumber: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $issueNumber) {
+                    id
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project {
+                          id
+                          title
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
 
-            // Fetch the projects for the repository
-            const projects = await octokit.rest.projects.listForRepo({
+            // Fetch the issue details and associated project items
+            const result = await github.graphql(query, {
               owner: owner,
-              repo: repo
+              repo: repo,
+              issueNumber: issueNumber
             });
 
-            // Find the project by name
-            const project = projects.data.find(proj => proj.name === "My Classic Project");
+            const issueId = result.repository.issue.id;
+            const projectItems = result.repository.issue.projectItems.nodes;
 
-            if (!project) {
-              throw new Error("Project not found");
+            // Find the project item for the specific project
+            const projectItem = projectItems.find(item => item.project.title === "Your Project Name");
+
+            if (projectItem) {
+              const projectItemId = projectItem.id;
+              const projectId = projectItem.project.id;
+
+              // GraphQL mutation to move the project item to In Progress
+              const mutation = `
+                mutation($projectItemId: ID!, $status: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId,
+                    itemId: $projectItemId,
+                    field: "status",
+                    value: { name: $status }
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `;
+
+              await github.graphql(mutation, {
+                projectId: projectId,
+                projectItemId: projectItemId,
+                status: "In Progress"
+              });
+
+              console.log(`Moved issue #${issueNumber} to "In Progress"`);
+            } else {
+              console.log(`Issue #${issueNumber} is not part of the specified project`);
             }
-
-            // Get the columns for the project
-            const columns = await octokit.rest.projects.listColumns({
-              project_id: project.id
-            });
-
-            // Find the "In Progress" column
-            const inProgressColumn = columns.data.find(column => column.name === "In Progress");
-
-            if (!inProgressColumn) {
-              throw new Error("In Progress column not found");
-            }
-
-            // Create a card for the issue in the "In Progress" column
-            await octokit.rest.projects.createCard({
-              column_id: inProgressColumn.id,
-              content_id: issueNumber,
-              content_type: 'Issue'
-            });
-
-            console.log(`Moved issue #${issueNumber} to "In Progress"`);
