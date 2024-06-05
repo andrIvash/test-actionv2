@@ -3,7 +3,12 @@ name: Move Assigned Issue to In Progress
 on:
   issues:
     types: [assigned]
-
+permissions:
+  contents: write # needed to write releases
+  id-token: write # needed for keyless signing
+  packages: write # needed for ghcr access
+  issues: write
+  project: write
 jobs:
   move:
     name: Move
