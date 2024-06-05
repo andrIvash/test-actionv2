@@ -8,7 +8,7 @@ permissions:
   id-token: write # needed for keyless signing
   packages: write # needed for ghcr access
   issues: write
-  project: write
+
 jobs:
   move:
     name: Move
