@@ -25,14 +25,14 @@ jobs:
               issue_number: issueNumber
             });
 
-            // Get the list of projects the issue is associated with
-            const issueProjects = await github.rest.projects.listForRepo({
+            // Get the list of projects for the repository
+            const projects = await github.rest.projects.listForRepo({
               owner: owner,
               repo: repo
             });
 
-            // Find the project item for the specific project
-            const project = issueProjects.data.find(project => project.name === "test1-project");
+            // Find the specific project
+            const project = projects.data.find(proj => proj.name === "test1-project");
 
             if (project) {
               // Get the columns for the project
@@ -44,18 +44,44 @@ jobs:
               const inProgressColumn = columns.data.find(column => column.name === "In Progress");
 
               if (inProgressColumn) {
-                // Create a project card for the issue in the "In Progress" column
-                await github.rest.projects.createCard({
-                  column_id: inProgressColumn.id,
-                  content_id: issue.data.id,
-                  content_type: 'Issue'
+                // Check if the issue is already part of the project
+                const projectCards = await github.rest.projects.listCards({
+                  column_id: inProgressColumn.id
                 });
 
-                console.log(`Moved issue #${issueNumber} to "In Progress"`);
+                const issueCard = projectCards.data.find(card => card.content_url === issue.data.url);
+
+                if (!issueCard) {
+                  // Add the issue to the first column if it's not part of the project
+                  const firstColumn = columns.data[0];
+                  await github.rest.projects.createCard({
+                    column_id: firstColumn.id,
+                    content_id: issue.data.id,
+                    content_type: 'Issue'
+                  });
+                }
+
+                // Move the issue to the "In Progress" column
+                const issueCards = await github.rest.projects.listCards({
+                  column_id: firstColumn.id
+                });
+
+                const card = issueCards.data.find(card => card.content_url === issue.data.url);
+
+                if (card) {
+                  await github.rest.projects.moveCard({
+                    card_id: card.id,
+                    position: 'top',
+                    column_id: inProgressColumn.id
+                  });
+
+                  console.log(`Moved issue #${issueNumber} to "In Progress"`);
+                } else {
+                  console.log(`Could not find the card for issue #${issueNumber}`);
+                }
               } else {
                 console.log(`"In Progress" column not found in project`);
               }
             } else {
-              console.log(`Issue #${issueNumber} is not part of the specified project`);
+              console.log(`Project "Your Project Name" not found`);
             }
-
